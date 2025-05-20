@@ -1,0 +1,89 @@
+{
+  "name": "SRT",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"node src/listener.mjs\"",
+    "build": "vite build",
+    "buildexe": "electron-builder --publish never",
+    "preview": "vite preview",
+    "electron": "electron ."
+  },
+  "dependencies": {
+    "@primeuix/themes": "^1.1.1",
+    "axios": "^1.9.0",
+    "chart.js": "^4.4.9",
+    "chartjs-adapter-date-fns": "^3.0.0",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "nvm": "^0.0.4",
+    "obs-websocket-js": "^5.0.6",
+    "primeflex": "^4.0.0",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.3.4",
+    "systeminformation": "^5.25.11",
+    "tailwindcss-primeui": "^0.6.1",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.7",
+    "@vitejs/plugin-vue": "^5.2.3",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "electron": "^36.2.1",
+    "electron-builder": "^26.0.12",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.7",
+    "vite": "^6.2.4",
+    "vite-plugin-vue-devtools": "^7.7.2"
+  },
+  "build": {
+    "appId": "imkompots",
+    "productName": "SRT",
+    "asar": true,
+    "extraFiles": [],
+    "extraResources": [],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "dist/icon_large.png",
+      "executableName": "SRT"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true
+    },
+    "files": [
+      "!**/*.map",
+      "!**/__tests__/**",
+      "!**/*.test.*",
+      "!**/*.spec.*",
+      "!**/docs/**",
+      "!**/examples/**",
+      "!**/tests/**",
+      "!**/*.md",
+      "!**/.gitignore",
+      "!**/.eslintrc",
+      "!**/tsconfig.json",
+      "!**/vite.config.*",
+      "dist/**/*",
+      "main.cjs",
+      "package.json"
+    ]
+  }
+}
