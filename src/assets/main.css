@@ -49,5 +49,6 @@ a,
 }
 .p-toast{
   left:20px!important;
-  width: 90vw!important;
+  width: auto!important;
+  margin-right: -15px;
 }

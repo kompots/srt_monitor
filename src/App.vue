@@ -18,9 +18,14 @@ import ToggleSwitch from 'primevue/toggleswitch';
 import Select from 'primevue/select';
 import InputGroup from 'primevue/inputgroup';
 import InputGroupAddon from 'primevue/inputgroupaddon';
-
+import Fluid from 'primevue/fluid';
 import InputNumber from 'primevue/inputnumber';
 import Message from 'primevue/message';
+
+import Accordion from 'primevue/accordion';
+import AccordionPanel from 'primevue/accordionpanel';
+import AccordionHeader from 'primevue/accordionheader';
+import AccordionContent from 'primevue/accordioncontent';
 
 import Card from 'primevue/card';
 import dayjs from 'dayjs';
@@ -50,31 +55,30 @@ const wsConnectionActive = ref(false)
 const srtConnectionActive = ref(null)
 const points = ref([]);
 const url = new URL(window.location.href);
-const ws = new WebSocket('ws://localhost:8080');
-
-let bFrameCounter = 0;
+const ws = new WebSocket('ws://localhost:3333');
+const scene = ref('');
+let accPanels = ref([1]);
+let bFrameCounter = ref(0);
 let bitrate = 0;
 ws.onopen = () => {
-  console.log('Connected to the WebSocket server');
-  wsMessage(JSON.stringify({method: 'getConfig'}))
+  wsMessage(JSON.stringify({ method: 'getConfig' }))
 
 };
 
 ws.onmessage = (event) => {
-  console.log(event.data)
   let _message = JSON.parse(event.data);
-  if(_message.method=='updateConfig'){
+  if (_message.method == 'updateConfig') {
     config.value = _message.config
-    if(!wsConnectionActive.value && config.value.ws.connected){
+    if (!wsConnectionActive.value && config.value.ws.connected) {
       establishWSConnection(true)
     }
   }
-  if(_message.method=='disconnect'){
+  if (_message.method == 'disconnect') {
     config.value = _message.config
     establishWSConnection(false)
   }
 
-  if(_message.method=='bitrate'){
+  if (_message.method == 'bitrate') {
     bitrate = _message.bitrate
   }
 };
@@ -84,7 +88,7 @@ ws.onclose = () => {
 };
 
 const wsMessage = (message) => {
-      ws.send(message);
+  ws.send(message);
 }
 
 onMounted(async () => {
@@ -97,13 +101,11 @@ onBeforeUnmount(() => {
 });
 
 const disconnect = () => {
-  console.log("Disconnectnpm")
-  wsMessage(JSON.stringify({method: 'disconnect', config: config.value}))
+  wsMessage(JSON.stringify({ method: 'disconnect', config: config.value }))
 }
 
 const toggleSwitcher = (evet) => {
   config.value.ws.active = !config.value.ws.active;
-  //saveToConfig();
 }
 const saveToConfig = async () => {
   config.value.updateDate = new Date();
@@ -115,7 +117,7 @@ const saveToConfig = async () => {
 }
 
 const copyUrl = () => {
-  const url = `http://${url.hostname}:3001`;
+  const url = `http://${url.hostname}:8000`;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url)
       .then(() => {
@@ -145,9 +147,6 @@ const establishWSConnection = async (type) => {
     try {
       console.log(`ws://${config.value.ws.host}:${config.value.ws.port}`, `${config.value.ws.password}`)
       await obsWS.connect(`ws://${config.value.ws.host}:${config.value.ws.port}`, `${config.value.ws.password}`);
-      wsConnectionActive.value = true;
-      config.value.ws.connected = true;
-      wsMessage(JSON.stringify({method: 'setConfig', config: config.value}))
       try {
         const { scenes: sceneList } = await obsWS.call('GetSceneList')
         obs.value.scenes = sceneList;
@@ -168,10 +167,16 @@ const establishWSConnection = async (type) => {
       } catch (err) {
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to retrieve source list', life: 3000 });
       }
+      wsConnectionActive.value = true;
+      config.value.ws.connected = true;
+      accPanels.value.push(2);
+      accPanels.value.shift();
+      wsMessage(JSON.stringify({ method: 'setConfig', config: config.value }))
+      toast.add({ severity: 'success', summary: 'Success', detail: 'Connect to OBS', life: 3000 });
       intervalId = setInterval(fetchAndUpdateData, (config.value.srt.ratio * 1000));
     } catch (err) {
       console.log(err)
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to connect to OBS', life: 2500 });
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to connect to OBS', life: 3000 });
     }
   } else {
     wsConnectionActive.value = false;
@@ -191,38 +196,40 @@ const establishWSConnection = async (type) => {
 };
 
 const doFrameCompare = async (bitrate) => {
-  console.log(config.value.ws.active)
+  const { currentProgramSceneName } = await obsWS.call('GetCurrentProgramScene');
+  console.log(bFrameCounter.value)
+  scene.value = currentProgramSceneName;
   if (Math.floor(bitrate) < config.value.srt.bitrate) {
-    bFrameCounter = (bFrameCounter + 1) > 3 ? 3 : (bFrameCounter + 1);
+    bFrameCounter.value = (bFrameCounter.value + 1) > config.value.srt.bframes ? config.value.srt.bframes : (bFrameCounter.value + 1);
   } else {
-    bFrameCounter = (bFrameCounter - 1) > 0 ? (bFrameCounter - 1) : 0;
+    bFrameCounter.value = (bFrameCounter.value - 1) > 0 ? (bFrameCounter.value - 1) : 0;
   }
 
   let low = false;
-  if(config.value.obs.main_scene!==undefined){
+  if (config.value.obs.main_scene !== undefined) {
     const result = await obsWS.call('GetSceneItemList', {
-        sceneName: config.value.obs.main_scene
+      sceneName: config.value.obs.main_scene
+    });
+    const item = result.sceneItems.find(i => i.sourceName === config.value.obs.source);
+    if (item) {
+      const transform = await obsWS.call('GetSceneItemTransform', {
+        sceneName: config.value.obs.main_scene,
+        sceneItemId: item.sceneItemId
       });
-      const item = result.sceneItems.find(i => i.sourceName === config.value.obs.source);
-      if (item) {
-        const transform = await obsWS.call('GetSceneItemTransform', {
-          sceneName: config.value.obs.main_scene,
-          sceneItemId: item.sceneItemId
-        });
-        const { width, height, scaleX, scaleY } = transform.sceneItemTransform;
-        const actualHeight = height * scaleY;
-        if (Math.floor(actualHeight) > 10) {
-          low = true;
-        }
+      const { width, height, scaleX, scaleY } = transform.sceneItemTransform;
+      const actualHeight = height * scaleY;
+      if (Math.floor(actualHeight) > 10) {
+        low = true;
       }
+    }
   }
 
-  if (bFrameCounter == 0) {
+  if (bFrameCounter.value == 0) {
     if (config.value.ws?.active && config.value.obs.main_scene !== undefined) {
       await obsWS.call('SetCurrentProgramScene', { sceneName: config.value.obs.main_scene });
     }
   }
-  if (bFrameCounter > 2) {
+  if (bFrameCounter.value >= config.value.srt.bframes) {
     if (!low) {
       if (config.value.ws?.active && config.value.obs.fallback_scene !== undefined) {
         await obsWS.call('SetCurrentProgramScene', { sceneName: config.value.obs.fallback_scene });
@@ -283,7 +290,7 @@ function createChart() {
 async function fetchAndUpdateData() {
   try {
     console.log("Send request for bitrate")
-    wsMessage(JSON.stringify({method: 'bitrate'}))
+    wsMessage(JSON.stringify({ method: 'bitrate' }))
     const now = new Date().toLocaleTimeString();
     data.labels.push(now);
     data.datasets[0].data.push(parseFloat(bitrate));
@@ -317,76 +324,109 @@ async function fetchAndUpdateData() {
     </TabList>
     <TabPanels>
       <TabPanel value="0" as="p" class="m-0">
-        <Card>
-          <template #title>Web socket connection
-            <Button class="float-right pt-0 mt-0" v-tooltip.top="'Copy panel url'" icon="pi pi-copy" severity="primary"
-              variant="text" @click="copyUrl" rounded aria-label="Filter" />
-          </template>
-          <template #content>
-            <div class="pt-2">
-              <div class="flex gap-1">
-                <div class="flex-col size-10/12">
-                  <InputGroup>
-                    <InputGroupAddon>ws://</InputGroupAddon>
+
+        <Accordion :value="accPanels" multiple>
+          <AccordionPanel :value="1" class="pb-4">
+            <AccordionHeader>
+              Web socket connection 2
+              <!-- <Button class="float-right pt-0 mt-0" v-tooltip.top="'Copy panel url'" icon="pi pi-copy" severity="primary"
+              variant="text" @click="copyUrl" rounded aria-label="Filter" /> -->
+            </AccordionHeader>
+            <AccordionContent>
+              <div class="pt-2">
+                <div class="flex gap-1">
+                  <div class="flex-col size-10/12">
+                    <InputGroup>
+                      <InputGroupAddon>ws://</InputGroupAddon>
+                      <FloatLabel variant="on">
+                        <InputText id="ws_host" class="w-full" v-model="config.ws.host" autocomplete="off"
+                          :readonly="wsConnectionActive" />
+                        <label for="ws_host">Host</label>
+                      </FloatLabel>
+                    </InputGroup>
+                  </div>
+                  <div class="flex-col size-2/12">
                     <FloatLabel variant="on">
-                      <InputText id="ws_host" class="w-full" v-model="config.ws.host" autocomplete="off"
+                      <InputText id="ws_port" class="w-full" v-model="config.ws.port" autocomplete="off"
                         :readonly="wsConnectionActive" />
-                      <label for="ws_host">Host</label>
+                      <label for="ws_port">Port</label>
                     </FloatLabel>
-                  </InputGroup>
+                  </div>
                 </div>
-                <div class="flex-col size-2/12">
-                  <FloatLabel variant="on">
-                    <InputText id="ws_port" class="w-full" v-model="config.ws.port" autocomplete="off"
-                      :readonly="wsConnectionActive" />
-                    <label for="ws_port">Port</label>
-                  </FloatLabel>
-                </div>
-              </div>
 
-            </div>
-            <div class="pt-2">
-              <FloatLabel variant="on">
-                <Password id="ws_password" fluid :toggleMask="true" :feedback="false" v-model="config.ws.password"
-                  :disabled="wsConnectionActive" autocomplete="off" />
-                <label for="ws_password">WS password</label>
-              </FloatLabel>
-            </div>
-            <div class="">
-              <div class="flex-col">
+              </div>
+              <div class="pt-2">
+                <FloatLabel variant="on">
+                  <Password id="ws_password" fluid :toggleMask="true" :feedback="false" v-model="config.ws.password"
+                    :disabled="wsConnectionActive" autocomplete="off" />
+                  <label for="ws_password">WS password</label>
+                </FloatLabel>
+              </div>
+              <div class="">
+                <div class="flex-col">
 
-                <div class="pt-2 float-right" v-if="wsConnectionActive">
-                  <Button icon="pi pi-times-circle" label="Disconnect" severity="danger" variant="text"
-                    @click="disconnect()" rounded aria-label="Filter" />
+                  <div class="pt-2 float-right" v-if="wsConnectionActive">
+                    <Button icon="pi pi-times-circle" label="Disconnect" severity="danger" variant="text"
+                      @click="disconnect()" rounded aria-label="Filter" />
+                  </div>
+                </div>
+                <div>
+                  <div class="float-left pt-3">
+                    <div class="float-left pr-2 pt-1">Scene switching</div>
+                    <ToggleSwitch v-model="empty" @change="toggleSwitcher" />
+                  </div>
+                  <div class="pt-2 float-right" v-if="!wsConnectionActive">
+                    <Button size="small" label="Connect" severity="success" @click="establishWSConnection(true)" />
+                  </div>
                 </div>
               </div>
-              <div>
-                <div class="float-left pt-3">
-                  <div class="float-left pr-2 pt-1">Scene switching</div>
-                  <ToggleSwitch v-model="empty" @change="toggleSwitcher" />
-                </div>
-                <div class="pt-2 float-right" v-if="!wsConnectionActive">
-                  <Button size="small" label="Connect" severity="success" @click="establishWSConnection(true)" />
+            </AccordionContent>
+          </AccordionPanel>
+          <AccordionPanel :value="2">
+            <AccordionHeader>
+              SRT Monitoring
+            </AccordionHeader>
+            <AccordionContent>
+              <div class="flex gap-2">
+                <div class="w-full">
+                  <Fluid>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0">
+                      <div class="flex justify-center text-center">
+                        Current bitrate:
+                        <span v-if="Math.floor(bitrate) >= config.srt.bitrate" class="text-green-500 px-2">
+                          {{ Math.floor(bitrate) }}
+                        </span>
+                        <span v-else class="text-red-500 px-2">
+                          {{ Math.floor(bitrate) }}
+                        </span>
+                        kbps
+                      </div>
+
+                      <div class="flex justify-center text-center">
+                        Current scene: {{ scene }}
+                      </div>
+
+                      <div class="flex justify-center text-center">
+                        Bad frame counter:
+                        <span v-if="bFrameCounter == 0" class="text-green-500 px-2">
+                          {{ bFrameCounter }} / {{ config.srt.bframes }}
+                        </span>
+                        <span v-else class="text-red-500 px-2">
+                          {{ bFrameCounter }} / {{ config.srt.bframes }}
+                        </span>
+                      </div>
+                    </div>
+                  </Fluid>
+
                 </div>
               </div>
-            </div>
-          </template>
-        </Card>
-        <div class="pt-2"></div>
-        <Card>
-          <template #title>Traffic bitrate</template>
-          <template #content>
-            <div class="flex gap-2">
-              <div class="w-full">
-                <div class="pt-2 pb-2" v-if="wsConnectionActive">Bitrate throughput</div>
-                <ProgressBar v-if="wsConnectionActive" mode="indeterminate" style="height: 6px"></ProgressBar>
+              <div class="pt-6">
+                <canvas ref="chartCanvas" width="600" height="300"></canvas>
               </div>
-            </div>
-            <div class="pt-6">
-              <canvas ref="chartCanvas" width="600" height="300"></canvas>
-            </div>
-          </template>
-        </Card>
+            </AccordionContent>
+          </AccordionPanel>
+        </Accordion>
+
 
       </TabPanel>
 

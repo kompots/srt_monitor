@@ -1,8 +1,8 @@
 import si from 'systeminformation';
 import fs from 'fs';
 import { WebSocketServer } from 'ws';
-
-const wss = new WebSocketServer({ port: 8080 });
+console.log("LISTENER FILE WAS READ")
+const wss = new WebSocketServer({ port: 3333 });
 let config_updated = false;
 let config = {};
 let prevRecv = 0;
@@ -11,13 +11,13 @@ let currentBitrate = 0;
 const rawData = fs.readFileSync('config.json', 'utf-8');
 config = JSON.parse(rawData);
 
-setInterval(updateBitrate, 1000);
-await updateBitrate();
 
-console.log('WebSocket server started on ws://localhost:8080');
+
+console.log('WebSocket server started on ws://localhost:3333');
 
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
+    console.log("WS Message: ", message)
     let _message = JSON.parse(message)
     if(_message.method=='getConfig'){
           ws.send(JSON.stringify({
@@ -68,6 +68,9 @@ wss.on('connection', (ws) => {
     console.log('Client disconnected');
   });
 });
+
+setInterval(updateBitrate, 1000);
+await updateBitrate();
 
 async function updateBitrate() {
   try {
