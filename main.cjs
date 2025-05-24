@@ -73,13 +73,13 @@ function createTray() {
 }
 
 function startWebServer() {
-  const webServer = spawn('npm', ['http-server', 'dist'], {
+  webServerProcess = spawn('npx', ['http-server', 'dist'], {
     stdio: 'inherit',
     shell: true,
     windowsHide: true
   });
 
-  webServer.on('error', (err) => {
+  webServerProcess.on('error', (err) => {
     console.error('Failed to start webserver:', err);
   });
 }
@@ -110,6 +110,35 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Simulate clicking the "Quit" tray icon item after a delay
+  setTimeout(() => {
+    console.log('Simulating quit from tray icon via internal timeout...');
+    app.isQuiting = true; // Important for our quit logic in 'close' event of window
+
+    console.log('Terminating processes (simulated tray quit)...');
+    if (webServerProcess) {
+      try {
+        process.kill(webServerProcess.pid);
+        console.log('Web server process termination signal sent.');
+      } catch (e) {
+        console.error('Error killing web server process:', e);
+      }
+    }
+    if (apiListenerProcess) {
+      try {
+        process.kill(apiListenerProcess.pid);
+        console.log('API listener process termination signal sent.');
+      } catch (e) {
+        console.error('Error killing API listener process:', e);
+      }
+    }
+    // Give a moment for processes to be killed before quitting app
+    setTimeout(() => {
+      app.quit();
+      console.log('app.quit() called.');
+    }, 1000); // 1 second delay before app.quit()
+  }, 10000); // Simulate quit after 10 seconds
 });
 
 // Quit when all windows closed (optional, depends on your app behavior)
