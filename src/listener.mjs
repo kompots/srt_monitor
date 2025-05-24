@@ -1,23 +1,73 @@
-import express from 'express';
-import cors from 'cors';
 import si from 'systeminformation';
+import fs from 'fs';
+import { WebSocketServer } from 'ws';
 
-const app = express();
-const PORT = 3003;
-
-// Enable CORS for all origins using middleware
-app.use(cors());
-
-// Optional: Also set CORS headers manually for extra safety
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*'); // Allow all origins
-  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
-
+const wss = new WebSocketServer({ port: 8080 });
+let config_updated = false;
+let config = {};
 let prevRecv = 0;
 let currentBitrate = 0;
+
+const rawData = fs.readFileSync('config.json', 'utf-8');
+config = JSON.parse(rawData);
+
+setInterval(updateBitrate, 1000);
+await updateBitrate();
+
+console.log('WebSocket server started on ws://localhost:8080');
+
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    let _message = JSON.parse(message)
+    if(_message.method=='getConfig'){
+          ws.send(JSON.stringify({
+                method: "updateConfig",
+                config: config
+              }));
+    }
+    if(_message.method=='setConfig'){
+          config_updated = true;
+          config = _message.config;
+          wss.clients.forEach((client) => {
+            if (client !== ws && client.readyState === ws.OPEN){
+              console.log("Send update to clients")
+              client.send(JSON.stringify({
+                method: "updateConfig",
+                config: config
+              }));
+            }
+          });
+    }
+    if(_message.method=='disconnect'){
+          config = _message.config;
+          wss.clients.forEach((client) => {
+            if (client.readyState === ws.OPEN){
+              console.log("Send update to clients")
+              client.send(JSON.stringify({
+                method: "disconnect",
+                config: config
+              }));
+            }
+          });
+    }
+    if(_message.method=='bitrate'){
+          wss.clients.forEach((client) => {
+            if (client == ws && client.readyState === ws.OPEN){
+              console.log("Send bitrate to clients")
+              client.send(JSON.stringify({
+                method: "bitrate",
+                bitrate: currentBitrate
+              }));
+            }
+          });
+    }
+
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+});
 
 async function updateBitrate() {
   try {
@@ -30,14 +80,3 @@ async function updateBitrate() {
     console.error('Failed to get network stats:', err);
   }
 }
-
-setInterval(updateBitrate, 1000);
-await updateBitrate();
-
-app.get('/bitrate', (req, res) => {
-  res.json({ bitrate: currentBitrate.toFixed(2) });
-});
-
-app.listen(PORT, () => {
-  console.log(`Bitrate API server running on http://localhost:${PORT}`);
-});

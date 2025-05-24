@@ -18,8 +18,8 @@ function createWindow() {
 
   win = new BrowserWindow({
     width: 410,
-    height: 600,
-    autoHideMenuBar: true,
+    height: 665,
+    autoHideMenuBar: false,
     show: false, // Start hidden; show after ready-to-show event
     webPreferences: {
       contextIsolation: true,
@@ -73,14 +73,14 @@ function createTray() {
 }
 
 function startWebServer() {
-  const viteProcess = spawn('npm', ['run', 'dev'], {
+  const webServer = spawn('npm', ['http-server', 'dist'], {
     stdio: 'inherit',
     shell: true,
     windowsHide: true
   });
 
-  viteProcess.on('error', (err) => {
-    console.error('Failed to start Vite dev server:', err);
+  webServer.on('error', (err) => {
+    console.error('Failed to start webserver:', err);
   });
 }
 
@@ -118,3 +118,12 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+

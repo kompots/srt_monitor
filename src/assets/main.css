@@ -5,6 +5,7 @@
 #app {
   margin: 0 auto;
   font-weight: normal;
+  width: 100%;
 }
 
 a,
@@ -29,7 +30,6 @@ a,
 
   #app {
     display: grid;
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -48,5 +48,6 @@ a,
   padding-bottom: 0px;
 }
 .p-toast{
-  width: 358px!important;
+  left:20px!important;
+  width: 90vw!important;
 }
