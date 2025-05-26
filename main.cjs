@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
+const { list } = require('postcss');
 
 let win;
 let tray;
@@ -9,7 +10,6 @@ let tray;
 function createWindow() {
   const indexPath = path.join(app.getAppPath(), 'dist', 'index.html');
 
-  console.log('Loading file:', indexPath);
   if (!fs.existsSync(indexPath)) {
     console.error('Missing build files. Run "npm run build" first.');
     app.quit();
@@ -45,7 +45,6 @@ function createWindow() {
 
 function createTray() {
   const iconPath = path.join(__dirname, 'dist', 'icon.ico'); // Use your icon here
-  console.log('Loading tray icon:', iconPath);
   tray = new Tray(iconPath);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -73,6 +72,11 @@ function createTray() {
 }
 
 function startWebServer() {
+  // const webServerProcess = exec('npx http-server dist', { shell: true });
+
+  // webServerProcess.stdout?.pipe(process.stdout);
+  // webServerProcess.stderr?.pipe(process.stderr);
+  // console.log("Webserver shell executed")
   webServerProcess = spawn('npx', ['http-server', 'dist'], {
     stdio: 'inherit',
     shell: true,
@@ -84,9 +88,18 @@ function startWebServer() {
   });
 }
 
-function startApiListener() {
+async function startApiListener() {
   console.log("Starting to build API server with websocket")
-  const listenerPath = path.join(__dirname, 'src', 'listener.mjs');
+  await app.whenReady();
+  const basePath = app.resourcesPath || app.getAppPath() + '/dist/win-unpacked/resources/';
+  const listenerPath = path.join(
+    basePath,
+    'app.asar.unpacked',
+    'src',
+    'listener.mjs'
+  );
+  // const listenerPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'listener.mjs');
+  console.log("Listener path: ", listenerPath)
   const child = spawn('node', ['--experimental-modules', listenerPath], {
     stdio: 'inherit',
     shell: true,
@@ -100,8 +113,8 @@ process.on('uncaughtException', (err) => {
 });
 
 app.whenReady().then(() => {
-  startApiListener();
-  startWebServer();
+  startApiListener().catch(console.error);
+  // startWebServer();
   createWindow();
   createTray();
 

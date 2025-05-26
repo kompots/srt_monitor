@@ -1,13 +1,15 @@
 {
-  "name": "SRT",
+  "name": "srt",
   "version": "1.0.0",
+  "description": "Application to monitor SRT video stream and switch OBS scenes automatically",
+  "author": "kompots",
   "private": true,
   "type": "module",
   "main": "main.cjs",
   "scripts": {
     "dev": "concurrently \"vite\" \"node src/listener.mjs\"",
     "build": "vite build",
-    "buildexe": "electron-builder --publish never",
+    "buildexe": "vite build && electron-builder --publish never",
     "preview": "vite preview",
     "electron": "electron ."
   },
@@ -53,6 +55,9 @@
     "directories": {
       "buildResources": "build"
     },
+    "asarUnpack": [
+      "src/listener.mjs"
+    ],
     "win": {
       "target": [
         {
@@ -86,7 +91,8 @@
       "!**/vite.config.*",
       "dist/**/*",
       "main.cjs",
-      "package.json"
+      "package.json",
+      "src/listener.mjs"
     ]
   }
 }

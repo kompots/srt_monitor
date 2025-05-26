@@ -17,7 +17,6 @@ console.log('WebSocket server started on ws://localhost:3333');
 
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
-    console.log("WS Message: ", message)
     let _message = JSON.parse(message)
     if(_message.method=='getConfig'){
           ws.send(JSON.stringify({

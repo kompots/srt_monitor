@@ -57,9 +57,27 @@ const points = ref([]);
 const url = new URL(window.location.href);
 const ws = new WebSocket('ws://localhost:3333');
 const scene = ref('');
+const chartCanvas = ref(null);
+const data = {
+  labels: [],
+  datasets: [{
+    label: 'Bitrate (kbps)',
+    display: false,
+    borderColor: '#34d399',
+    backgroundColor: 'rgba(52,211,153,0.2)',
+    fill: true,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    data: [],
+  }]
+};
+
 let accPanels = ref([1]);
 let bFrameCounter = ref(0);
 let bitrate = 0;
+let chart = null;
+let intervalId = null;
+
 ws.onopen = () => {
   wsMessage(JSON.stringify({ method: 'getConfig' }))
 
@@ -107,6 +125,7 @@ const disconnect = () => {
 const toggleSwitcher = (evet) => {
   config.value.ws.active = !config.value.ws.active;
 }
+
 const saveToConfig = async () => {
   config.value.updateDate = new Date();
   wsMessage(JSON.stringify({
@@ -127,7 +146,6 @@ const copyUrl = () => {
         console.error('Failed to copy:', err);
       });
   } else {
-    // Fallback for older browsers
     const textarea = document.createElement('textarea');
     textarea.value = url;
     document.body.appendChild(textarea);
@@ -145,7 +163,6 @@ const copyUrl = () => {
 const establishWSConnection = async (type) => {
   if (type) {
     try {
-      console.log(`ws://${config.value.ws.host}:${config.value.ws.port}`, `${config.value.ws.password}`)
       await obsWS.connect(`ws://${config.value.ws.host}:${config.value.ws.port}`, `${config.value.ws.password}`);
       try {
         const { scenes: sceneList } = await obsWS.call('GetSceneList')
@@ -195,17 +212,7 @@ const establishWSConnection = async (type) => {
 
 };
 
-const doFrameCompare = async (bitrate) => {
-  const { currentProgramSceneName } = await obsWS.call('GetCurrentProgramScene');
-  console.log(bFrameCounter.value)
-  scene.value = currentProgramSceneName;
-  if (Math.floor(bitrate) < config.value.srt.bitrate) {
-    bFrameCounter.value = (bFrameCounter.value + 1) > config.value.srt.bframes ? config.value.srt.bframes : (bFrameCounter.value + 1);
-  } else {
-    bFrameCounter.value = (bFrameCounter.value - 1) > 0 ? (bFrameCounter.value - 1) : 0;
-  }
-
-  let low = false;
+const isFrameGood = async () => {
   if (config.value.obs.main_scene !== undefined) {
     const result = await obsWS.call('GetSceneItemList', {
       sceneName: config.value.obs.main_scene
@@ -219,48 +226,40 @@ const doFrameCompare = async (bitrate) => {
       const { width, height, scaleX, scaleY } = transform.sceneItemTransform;
       const actualHeight = height * scaleY;
       if (Math.floor(actualHeight) > 10) {
-        low = true;
+        return true;
       }
     }
   }
+  return false;
+}
 
+const doFrameCompare = async (bitrate) => {
+  const { currentProgramSceneName } = await obsWS.call('GetCurrentProgramScene');
+  scene.value = currentProgramSceneName;
+  if (Math.floor(bitrate) < config.value.srt.bitrate || !await isFrameGood()) {
+    bFrameCounter.value = (bFrameCounter.value + 1) > config.value.srt.bframes ? config.value.srt.bframes : (bFrameCounter.value + 1);
+  } else {
+    bFrameCounter.value = (bFrameCounter.value - 1) > 0 ? (bFrameCounter.value - 1) : 0;
+  }
   if (bFrameCounter.value == 0) {
-    if (config.value.ws?.active && config.value.obs.main_scene !== undefined) {
+    if (config.value.ws?.active && config.value.obs.main_scene !== undefined && scene.value !== config.value.obs.main_scene) {
       await obsWS.call('SetCurrentProgramScene', { sceneName: config.value.obs.main_scene });
     }
   }
   if (bFrameCounter.value >= config.value.srt.bframes) {
-    if (!low) {
-      if (config.value.ws?.active && config.value.obs.fallback_scene !== undefined) {
+    if (!await isFrameGood()) {
+      if (config.value.ws?.active && config.value.obs.fallback_scene !== undefined && scene.value !== config.value.obs.fallback_scene) {
         await obsWS.call('SetCurrentProgramScene', { sceneName: config.value.obs.fallback_scene });
       }
     } else {
-      if (config.value.ws?.active && config.value.obs.low_scene !== undefined) {
+      if (config.value.ws?.active && config.value.obs.low_scene !== undefined && scene.value !== config.value.obs.low_scene) {
         await obsWS.call('SetCurrentProgramScene', { sceneName: config.value.obs.low_scene });
       }
     }
   }
 }
 
-const chartCanvas = ref(null);
-let chart = null;
-let intervalId = null;
-
-const data = {
-  labels: [],
-  datasets: [{
-    label: 'Bitrate (kbps)',
-    display: false,
-    borderColor: '#34d399',
-    backgroundColor: 'rgba(52,211,153,0.2)',
-    fill: true,
-    pointRadius: 0,
-    pointHoverRadius: 0,
-    data: [],
-  }]
-};
-
-function createChart() {
+const createChart = () => {
   chart = new Chart(chartCanvas.value, {
     type: 'line',
     data,
@@ -287,9 +286,8 @@ function createChart() {
   });
 }
 
-async function fetchAndUpdateData() {
+const fetchAndUpdateData = async () => {
   try {
-    console.log("Send request for bitrate")
     wsMessage(JSON.stringify({ method: 'bitrate' }))
     const now = new Date().toLocaleTimeString();
     data.labels.push(now);
@@ -299,7 +297,6 @@ async function fetchAndUpdateData() {
       data.labels.shift();
       data.datasets[0].data.shift();
     }
-
     chart.update();
   } catch (e) {
     console.error('Failed to fetch bitrate:', e);
@@ -307,9 +304,7 @@ async function fetchAndUpdateData() {
 }
 
 </script>
-
 <template>
-
   <Toast />
   <Tabs value="0" class="text-xs">
     <TabList>
@@ -328,7 +323,7 @@ async function fetchAndUpdateData() {
         <Accordion :value="accPanels" multiple>
           <AccordionPanel :value="1" class="pb-4">
             <AccordionHeader>
-              Web socket connection 2
+              Web socket connection
               <!-- <Button class="float-right pt-0 mt-0" v-tooltip.top="'Copy panel url'" icon="pi pi-copy" severity="primary"
               variant="text" @click="copyUrl" rounded aria-label="Filter" /> -->
             </AccordionHeader>
