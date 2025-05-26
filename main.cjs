@@ -77,9 +77,10 @@ function startWebServer() {
   // webServerProcess.stdout?.pipe(process.stdout);
   // webServerProcess.stderr?.pipe(process.stderr);
   // console.log("Webserver shell executed")
-  webServerProcess = spawn('npx', ['http-server', 'dist'], {
+  const distPath = path.join(app.getAppPath(), 'dist');
+  webServerProcess = spawn('npx', ['http-server', distPath], {
     stdio: 'inherit',
-    shell: true,
+    shell: true, // shell: true is often needed for npx on Windows
     windowsHide: false
   });
 
@@ -91,16 +92,20 @@ function startWebServer() {
 async function startApiListener() {
   console.log("Starting to build API server with websocket")
   await app.whenReady();
-  const basePath = app.resourcesPath || app.getAppPath() + '/dist/win-unpacked/resources/';
-  const listenerPath = path.join(
-    basePath,
-    'app.asar.unpacked',
-    'src',
-    'listener.mjs'
-  );
-  // const listenerPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'listener.mjs');
-  console.log("Listener path: ", listenerPath)
-  const child = spawn('node', ['--experimental-modules', listenerPath], {
+  let listenerPath;
+  if (app.isPackaged) {
+    // For packaged app, assuming listener.js is in 'src' under 'app.asar.unpacked'
+    // which is relative to 'resourcesPath' (e.g., resources/app.asar.unpacked/src/listener.js)
+    // or directly under resources if not using asar extravagantly.
+    // A common pattern is to place such files in a directory that's explicitly unpacked.
+    // The existing code uses 'app.asar.unpacked/src/listener.mjs'. We will stick to that structure.
+    listenerPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'listener.js');
+  } else {
+    // For development
+    listenerPath = path.join(app.getAppPath(), 'src', 'listener.js');
+  }
+  console.log("Listener path: ", listenerPath);
+  const child = spawn('node', [listenerPath], {
     stdio: 'inherit',
     shell: true,
     windowsHide: false
