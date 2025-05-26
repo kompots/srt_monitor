@@ -330,7 +330,7 @@ const fetchAndUpdateData = async () => {
             <AccordionContent>
               <div class="pt-2">
                 <div class="flex gap-1">
-                  <div class="flex-col size-10/12">
+                  <div class="flex-col size-9/12">
                     <InputGroup>
                       <InputGroupAddon>ws://</InputGroupAddon>
                       <FloatLabel variant="on">
@@ -340,7 +340,7 @@ const fetchAndUpdateData = async () => {
                       </FloatLabel>
                     </InputGroup>
                   </div>
-                  <div class="flex-col size-2/12">
+                  <div class="flex-col size-3/12">
                     <FloatLabel variant="on">
                       <InputText id="ws_port" class="w-full" v-model="config.ws.port" autocomplete="off"
                         :readonly="wsConnectionActive" />
@@ -367,8 +367,7 @@ const fetchAndUpdateData = async () => {
                 </div>
                 <div>
                   <div class="float-left pt-3">
-                    <div class="float-left pr-2 pt-1">Scene switching</div>
-                    <ToggleSwitch v-model="empty" @change="toggleSwitcher" />
+
                   </div>
                   <div class="pt-2 float-right" v-if="!wsConnectionActive">
                     <Button size="small" label="Connect" severity="success" @click="establishWSConnection(true)" />
@@ -379,34 +378,42 @@ const fetchAndUpdateData = async () => {
           </AccordionPanel>
           <AccordionPanel :value="2">
             <AccordionHeader>
-              SRT Monitoring
+              Scene automatic control
+              <div class="float-left">
+                <ToggleSwitch size="small" v-model="empty" @click.stop @change="toggleSwitcher" />
+              </div>
             </AccordionHeader>
             <AccordionContent>
               <div class="flex gap-2">
                 <div class="w-full">
                   <Fluid>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0">
-                      <div class="flex justify-center text-center">
-                        Current bitrate:
-                        <span v-if="Math.floor(bitrate) >= config.srt.bitrate" class="text-green-500 px-2">
+
+                    <div style="clear: both;"></div>
+                    <div class="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-3 gap-0">
+                      <div class="justify-center flex-row text-center">
+                        <div>
+                          Current bitrate
+                        </div>
+                        <span v-if="Math.floor(bitrate) >= config.srt.bitrate" class="text-green-500">
                           {{ Math.floor(bitrate) }}
                         </span>
-                        <span v-else class="text-red-500 px-2">
+                        <span v-else class="text-red-500">
                           {{ Math.floor(bitrate) }}
                         </span>
                         kbps
                       </div>
 
-                      <div class="flex justify-center text-center">
-                        Current scene: {{ scene }}
+                      <div class="justify-center text-center">
+                        <div>Current scene</div>
+                        <span>{{ scene }}</span>
                       </div>
 
-                      <div class="flex justify-center text-center">
-                        Bad frame counter:
-                        <span v-if="bFrameCounter == 0" class="text-green-500 px-2">
+                      <div class="justify-center text-center">
+                        <div>Bad frames</div>
+                        <span v-if="bFrameCounter == 0" class="text-green-500">
                           {{ bFrameCounter }} / {{ config.srt.bframes }}
                         </span>
-                        <span v-else class="text-red-500 px-2">
+                        <span v-else class="text-red-500">
                           {{ bFrameCounter }} / {{ config.srt.bframes }}
                         </span>
                       </div>

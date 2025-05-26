@@ -24,6 +24,7 @@
     "dayjs": "^1.11.13",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "http-server": "^14.1.1",
     "nvm": "^0.0.4",
     "obs-websocket-js": "^5.0.6",
     "primeflex": "^4.0.0",
@@ -53,10 +54,12 @@
     "extraFiles": [],
     "extraResources": [],
     "directories": {
+      "output": "build",
       "buildResources": "build"
     },
     "asarUnpack": [
-      "src/listener.mjs"
+      "src/listener.mjs",
+      "dist"
     ],
     "win": {
       "target": [

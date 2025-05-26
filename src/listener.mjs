@@ -1,17 +1,25 @@
 import si from 'systeminformation';
 import fs from 'fs';
 import { WebSocketServer } from 'ws';
-console.log("LISTENER FILE WAS READ")
+// import { path } from 'path';
 const wss = new WebSocketServer({ port: 3333 });
 let config_updated = false;
-let config = {};
+let config = {
+  "ws": {
+    "active": false,
+    "host": "127.0.0.1",
+    "port": "4455",
+    "password": "",
+    "connected": false
+  },
+  "srt": {
+    "ratio": 1,
+    "bframes": 3
+  },
+  "obs": {}
+};
 let prevRecv = 0;
 let currentBitrate = 0;
-
-const rawData = fs.readFileSync('config.json', 'utf-8');
-config = JSON.parse(rawData);
-
-
 
 console.log('WebSocket server started on ws://localhost:3333');
 
