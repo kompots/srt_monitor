@@ -9,22 +9,21 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"node src/listener.mjs\"",
     "build": "vite build",
-    "buildexe": "vite build && electron-builder --publish never",
+    "rebuild-native": "npx electron-rebuild",
+    "buildexe": "npm run rebuild-native && vite build && electron-builder --publish never",
     "preview": "vite preview",
     "electron": "electron ."
   },
   "dependencies": {
     "@primeuix/themes": "^1.1.1",
     "axios": "^1.9.0",
-    "better-sqlite3": "^11.10.0",
     "chart.js": "^4.4.9",
     "chartjs-adapter-date-fns": "^3.0.0",
     "config": "^4.0.0",
     "cors": "^2.8.5",
-    "dayjs": "^1.11.13",
-    "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "http-server": "^14.1.1",
+    "mime": "^1.6.0",
     "nvm": "^0.0.4",
     "obs-websocket-js": "^5.0.6",
     "primeflex": "^4.0.0",
@@ -52,14 +51,37 @@
     "productName": "SRT",
     "asar": true,
     "extraFiles": [],
-    "extraResources": [],
+    "extraResources": [
+      {
+        "from": "node_modules/.bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules/http-server",
+        "to": "http-server",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "node_modules",
+        "to": "node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "directories": {
       "output": "build",
       "buildResources": "build"
     },
     "asarUnpack": [
       "src/listener.mjs",
-      "dist"
+      "dist",
+      "node_modules/.bin/*"
     ],
     "win": {
       "target": [
@@ -74,7 +96,7 @@
       "executableName": "SRT"
     },
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": true,
       "allowElevation": true,
       "createDesktopShortcut": true
@@ -95,7 +117,8 @@
       "dist/**/*",
       "main.cjs",
       "package.json",
-      "src/listener.mjs"
+      "src/listener.mjs",
+      "node_modules/.bin/*"
     ]
   }
 }

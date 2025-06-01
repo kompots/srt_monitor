@@ -32,6 +32,13 @@ wss.on('connection', (ws) => {
                 config: config
               }));
     }
+    if (_message.method == 'syncConfig') {
+      console.log("Send sync to clients")
+      ws.send(JSON.stringify({
+            method: "syncConfig",
+            config: config
+          }));
+    }
     if(_message.method=='setConfig'){
           config_updated = true;
           config = _message.config;

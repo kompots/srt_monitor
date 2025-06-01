@@ -72,23 +72,24 @@ function createTray() {
 }
 
 async function startWebServer() {
-  await app.whenReady();
-  let listenerPath;
-  if (app.isPackaged) {
-    listenerPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'dist');
-  } else {
-    listenerPath = path.join(app.getAppPath(), 'dist');
-  }
-  console.log("Trying to start webserver from: ", listenerPath)
-  webServerProcess = spawn('npx', ['http-server', listenerPath], {
-    stdio: 'inherit',
+  const isWin = process.platform === 'win32';
+  const listenerPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'dist')
+    : path.join(app.getAppPath(), 'dist');
+  const binPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'bin', isWin ? 'http-server.cmd' : 'http-server')
+    : path.join(app.getAppPath(), 'node_modules', '.bin', isWin ? 'http-server.cmd' : 'http-server');
+
+  console.log('Trying to start webserver from:', listenerPath);
+  console.log('Binary path is:', binPath);
+
+  const webServerProcess = spawn(`"${binPath}"`, [`"${listenerPath}"`], {
     shell: true,
-    windowsHide: true
+    stdio: 'inherit',
+    windowsHide: true,
   });
 
-  webServerProcess.on('error', (err) => {
-    console.error('Failed to start webserver:', err);
-  });
+  console.log("Web server started with")
 }
 
 async function startApiListener() {
@@ -101,12 +102,11 @@ async function startApiListener() {
     listenerPath = path.join(app.getAppPath(), 'src', 'listener.mjs');
   }
   console.log("Listener path: ", listenerPath);
-  const child = spawn('node', [listenerPath], {
+  const apiListenerProcess = spawn('node', [listenerPath], {
     stdio: 'inherit',
-    shell: true,
     windowsHide: true
   });
-
+  console.log(apiListenerProcess)
 }
 
 process.on('uncaughtException', (err) => {
