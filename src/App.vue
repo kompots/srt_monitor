@@ -28,7 +28,6 @@ import AccordionHeader from 'primevue/accordionheader';
 import AccordionContent from 'primevue/accordioncontent';
 
 import Card from 'primevue/card';
-import dayjs from 'dayjs';
 import OBSWebSocket from 'obs-websocket-js';
 import Toast from 'primevue/toast';
 import { useToast } from "primevue/usetoast";
@@ -46,7 +45,7 @@ const config = ref({
   },
   obs: {}
 });
-
+const forceScene = ref(null);
 const obsWS = new OBSWebSocket();
 const obs = ref({});
 const scenes = ref([]);
@@ -55,7 +54,6 @@ const wsConnectionActive = ref(false)
 const srtConnectionActive = ref(null)
 const points = ref([]);
 const url = new URL(window.location.href);
-const ws = new WebSocket('ws://localhost:3333');
 const scene = ref('');
 const chartCanvas = ref(null);
 const data = {
@@ -77,39 +75,54 @@ let bFrameCounter = ref(0);
 let bitrate = 0;
 let chart = null;
 let intervalId = null;
+let ws = null;
+let srtSource = null;
 
-ws.onopen = () => {
-  wsMessage(JSON.stringify({ method: 'getConfig' }))
+const initSockets = () => {
+  console.log("initSockets call")
 
-};
+  ws.onerror = (error) => {
+    console.error("WebSocket error", error);
+  };
 
-ws.onmessage = (event) => {
-  let _message = JSON.parse(event.data);
-  if (_message.method == 'updateConfig') {
-    config.value = _message.config
-    if (!wsConnectionActive.value && config.value.ws.connected) {
-      establishWSConnection(true)
+  ws.onmessage = (event) => {
+    let _message = JSON.parse(event.data);
+    if (_message.method == 'syncConfig') {
+      console.log("Received configuration sync")
+      config.value = _message.config
+      localStorage.setItem('config', JSON.stringify(config.value));
     }
-  }
-  if (_message.method == 'disconnect') {
-    config.value = _message.config
-    establishWSConnection(false)
-  }
+    if (_message.method == 'updateConfig') {
+      config.value = _message.config
+      if (!wsConnectionActive.value && config.value.ws.connected) {
+        establishWSConnection(true)
+      }
+      localStorage.setItem('config', JSON.stringify(config.value));
+    }
+    if (_message.method == 'disconnect') {
+      config.value = _message.config
+      establishWSConnection(false)
+    }
 
-  if (_message.method == 'bitrate') {
-    bitrate = _message.bitrate
-  }
-};
+    if (_message.method == 'bitrate') {
+      bitrate = _message.bitrate
+    }
+  };
 
-ws.onclose = () => {
-  console.log('Disconnected from WebSocket server');
-};
+  ws.onclose = () => {
+    console.log('Disconnected from WebSocket server');
+  };
+
+}
 
 const wsMessage = (message) => {
   ws.send(message);
 }
 
 onMounted(async () => {
+  if (localStorage.getItem('config')) {
+    config.value = JSON.parse(localStorage.getItem('config'));
+  }
   createChart();
 });
 
@@ -132,6 +145,7 @@ const saveToConfig = async () => {
     method: 'setConfig',
     config: config.value
   }))
+  localStorage.setItem('config', JSON.stringify(config.value));
   toast.add({ severity: 'success', summary: 'Success', detail: 'Config saved', life: 3000 });
 }
 
@@ -160,10 +174,25 @@ const copyUrl = () => {
   }
 }
 
+const delay = (ms) => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const establishWSConnection = async (type) => {
   if (type) {
     try {
       await obsWS.connect(`ws://${config.value.ws.host}:${config.value.ws.port}`, `${config.value.ws.password}`);
+      ws = new WebSocket(`ws://${config.value.ws.host}:3333`);
+      ws.addEventListener('open', () => {
+        initSockets();
+      });
+      let count = 0;
+      while (count < 10 && ws.readyState !== WebSocket.OPEN) {
+        count++;
+        await delay(100);
+      }
+      console.log("Send sync call")
+      wsMessage(JSON.stringify({ method: 'syncConfig' }));
       try {
         const { scenes: sceneList } = await obsWS.call('GetSceneList')
         obs.value.scenes = sceneList;
@@ -219,6 +248,7 @@ const isFrameGood = async () => {
     });
     const item = result.sceneItems.find(i => i.sourceName === config.value.obs.source);
     if (item) {
+      srtSource = item.sourceUuid
       const transform = await obsWS.call('GetSceneItemTransform', {
         sceneName: config.value.obs.main_scene,
         sceneItemId: item.sceneItemId
@@ -233,9 +263,24 @@ const isFrameGood = async () => {
   return false;
 }
 
+const forceSrtReload = async () => {
+  const sceneItem = await obsWS.call('GetInputSettings', {
+    inputUuid: srtSource
+  });
+  let new_input = sceneItem.inputSettings.input.replace(/refid=[^&?]*/, 'refid=' + Date.now());
+  await obsWS.call("SetInputSettings", {
+    inputUuid: srtSource,
+    inputSettings: {
+      input: new_input
+    },
+    overlay: true
+  });
+}
+
 const doFrameCompare = async (bitrate) => {
   const { currentProgramSceneName } = await obsWS.call('GetCurrentProgramScene');
   scene.value = currentProgramSceneName;
+  forceScene.value = scene.value
   if (Math.floor(bitrate) < config.value.srt.bitrate || !await isFrameGood()) {
     bFrameCounter.value = (bFrameCounter.value + 1) > config.value.srt.bframes ? config.value.srt.bframes : (bFrameCounter.value + 1);
   } else {
@@ -303,6 +348,10 @@ const fetchAndUpdateData = async () => {
   }
 }
 
+const forceSceneChange = async () => {
+  console.log("Force switch")
+  await obsWS.call('SetCurrentProgramScene', { sceneName: forceScene.value });
+}
 </script>
 <template>
   <Toast />
@@ -376,11 +425,21 @@ const fetchAndUpdateData = async () => {
               </div>
             </AccordionContent>
           </AccordionPanel>
-          <AccordionPanel :value="2">
+          <AccordionPanel :value="2" :disabled="!wsConnectionActive">
             <AccordionHeader>
-              Scene automatic control
-              <div class="float-left">
-                <ToggleSwitch size="small" v-model="empty" @click.stop @change="toggleSwitcher" />
+              <div class="flex w-full">
+                <div class="flex-col size-4/12 pt-2">Automatic control</div>
+                <div class="flex-col size-2/12 pt-1">
+                  <ToggleSwitch size="small" v-model="empty" @click.stop @change="toggleSwitcher" />
+                </div>
+                <div class="flex-col size-6/12 pr-2">
+                  <FloatLabel class="w-full" variant="on">
+                    <Select v-model="forceScene" @click.stop inputId="forceScene" :disabled="config?.ws?.active"
+                      :options="obs.scenes" optionLabel="sceneName" optionValue="sceneName" class="w-full"
+                      @change="forceSceneChange()" />
+                    <label for="obs_source">Force scene</label>
+                  </FloatLabel>
+                </div>
               </div>
             </AccordionHeader>
             <AccordionContent>
@@ -436,13 +495,21 @@ const fetchAndUpdateData = async () => {
         <Card>
           <template #title>OBS</template>
           <template #content>
-            <div class="">
-              <FloatLabel class="w-full" variant="on">
-                <Select v-model="config.obs.source" inputId="obs_source" :options="obs.sources" optionLabel="sourceName"
-                  optionValue="sourceName" class="w-full" />
-                <label for="obs_source">SRT source</label>
-              </FloatLabel>
-              <div class="pl-1 pt-1 text-gray-500">Media source that displays SRT source</div>
+            <div class="flex gap-2">
+              <div class="size-9/12">
+                <FloatLabel class="w-full" variant="on">
+                  <Select v-model="config.obs.source" inputId="obs_source" :options="obs.sources"
+                    optionLabel="sourceName" optionValue="sourceName" class="w-full" />
+                  <label for="obs_source">SRT source</label>
+                </FloatLabel>
+                <div class="pl-1 pt-1 text-gray-500">Media source that displays SRT source</div>
+              </div>
+              <div class="size-3/12">
+                <Button size="small"
+                  :disabled="(config.obs.source === undefined || config.obs.main_scene === undefined)" label="Reload"
+                  severity="warn" @click="forceSrtReload()" />
+              </div>
+
             </div>
 
             <div class="pt-2">
