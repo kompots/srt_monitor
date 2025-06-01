@@ -30,19 +30,13 @@ a,
 
   #app {
     display: grid;
+    height: 100vh;
   }
 }
 
 .p-inputtext:disabled {
   background:none!important;
   color: #fff!important;
-}
-.p-card-body{
-  padding: 0px!important;
-
-}
-.p-card {
-  box-shadow: none !important;
 }
 .p-tabpanels{
   padding-bottom: 0px;

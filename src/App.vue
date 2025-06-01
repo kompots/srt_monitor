@@ -21,11 +21,19 @@ import InputGroupAddon from 'primevue/inputgroupaddon';
 import Fluid from 'primevue/fluid';
 import InputNumber from 'primevue/inputnumber';
 import Message from 'primevue/message';
-
+import MeterGroup from 'primevue/metergroup';
 import Accordion from 'primevue/accordion';
 import AccordionPanel from 'primevue/accordionpanel';
 import AccordionHeader from 'primevue/accordionheader';
 import AccordionContent from 'primevue/accordioncontent';
+
+
+import Stepper from 'primevue/stepper';
+import StepList from 'primevue/steplist';
+import StepPanels from 'primevue/steppanels';
+import StepItem from 'primevue/stepitem';
+import Step from 'primevue/step';
+import StepPanel from 'primevue/steppanel';
 
 import Card from 'primevue/card';
 import OBSWebSocket from 'obs-websocket-js';
@@ -42,6 +50,7 @@ const config = ref({
   srt: {
     ratio: 1,
     bframes: 3,
+    bitrate: 700
   },
   obs: {}
 });
@@ -50,7 +59,7 @@ const obsWS = new OBSWebSocket();
 const obs = ref({});
 const scenes = ref([]);
 const sources = ref([]);
-const wsConnectionActive = ref(false)
+const wsConnectionActive = ref(true)
 const srtConnectionActive = ref(null)
 const points = ref([]);
 const url = new URL(window.location.href);
@@ -69,10 +78,10 @@ const data = {
     data: [],
   }]
 };
-
+let totalPercent = ref(0);
 let accPanels = ref([1]);
 let bFrameCounter = ref(0);
-let bitrate = 0;
+let bitrate = ref(0);
 let chart = null;
 let intervalId = null;
 let ws = null;
@@ -105,7 +114,7 @@ const initSockets = () => {
     }
 
     if (_message.method == 'bitrate') {
-      bitrate = _message.bitrate
+      bitrate = ref(Math.floor(_message.bitrate))
     }
   };
 
@@ -267,7 +276,11 @@ const forceSrtReload = async () => {
   const sceneItem = await obsWS.call('GetInputSettings', {
     inputUuid: srtSource
   });
-  let new_input = sceneItem.inputSettings.input.replace(/refid=[^&?]*/, 'refid=' + Date.now());
+  if (new_input.replace(/refid=[^&?]*/, 'refid=' + Date.now()) == new_input) {
+    new_input = new_input + '?refid=' + Date.now();
+  } else {
+    new_input = new_input.replace(/refid=[^&?]*/, 'refid=' + Date.now();
+  }
   await obsWS.call("SetInputSettings", {
     inputUuid: srtSource,
     inputSettings: {
@@ -281,7 +294,7 @@ const doFrameCompare = async (bitrate) => {
   const { currentProgramSceneName } = await obsWS.call('GetCurrentProgramScene');
   scene.value = currentProgramSceneName;
   forceScene.value = scene.value
-  if (Math.floor(bitrate) < config.value.srt.bitrate || !await isFrameGood()) {
+  if (bitrate < config.value.srt.bitrate || !await isFrameGood()) {
     bFrameCounter.value = (bFrameCounter.value + 1) > config.value.srt.bframes ? config.value.srt.bframes : (bFrameCounter.value + 1);
   } else {
     bFrameCounter.value = (bFrameCounter.value - 1) > 0 ? (bFrameCounter.value - 1) : 0;
@@ -352,151 +365,74 @@ const forceSceneChange = async () => {
   console.log("Force switch")
   await obsWS.call('SetCurrentProgramScene', { sceneName: forceScene.value });
 }
+
 </script>
 <template>
   <Toast />
-  <Tabs value="0" class="text-xs">
-    <TabList>
-      <Tab value="0" as="div" class="flex items-center gap-2">
-        <i class="pi pi-sitemap" style="font-size: 1rem"></i>
-        <span class="font-bold whitespace-nowrap">Connection</span>
-      </Tab>
-      <Tab value="1" as="div" class="flex items-center gap-2" :disabled="!wsConnectionActive">
-        <i class="pi pi-cog" style="font-size: 1rem"></i>
-        <span class="font-bold whitespace-nowrap">Settings</span>
-      </Tab>
-    </TabList>
-    <TabPanels>
-      <TabPanel value="0" as="p" class="m-0">
+  <Stepper value="1">
+    <div class="p-4">
+      <StepList>
+        <Step value="1">Connect</Step>
+        <Step value="2" :disabled="!wsConnectionActive">Configure</Step>
+        <Step value="3" :disabled="!wsConnectionActive">Overview</Step>
+      </StepList>
+    </div>
 
-        <Accordion :value="accPanels" multiple>
-          <AccordionPanel :value="1" class="pb-4">
-            <AccordionHeader>
-              Web socket connection
-              <!-- <Button class="float-right pt-0 mt-0" v-tooltip.top="'Copy panel url'" icon="pi pi-copy" severity="primary"
-              variant="text" @click="copyUrl" rounded aria-label="Filter" /> -->
-            </AccordionHeader>
-            <AccordionContent>
-              <div class="pt-2">
-                <div class="flex gap-1">
-                  <div class="flex-col size-9/12">
-                    <InputGroup>
-                      <InputGroupAddon>ws://</InputGroupAddon>
-                      <FloatLabel variant="on">
-                        <InputText id="ws_host" class="w-full" v-model="config.ws.host" autocomplete="off"
-                          :readonly="wsConnectionActive" />
-                        <label for="ws_host">Host</label>
-                      </FloatLabel>
-                    </InputGroup>
-                  </div>
-                  <div class="flex-col size-3/12">
-                    <FloatLabel variant="on">
-                      <InputText id="ws_port" class="w-full" v-model="config.ws.port" autocomplete="off"
-                        :readonly="wsConnectionActive" />
-                      <label for="ws_port">Port</label>
-                    </FloatLabel>
-                  </div>
-                </div>
-
+    <StepPanels>
+      <StepPanel v-slot="{ activateCallback }" value="1">
+        <div
+          class="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded bg-surface-50 dark:bg-surface-950 text-xs p-2 items-start">
+          <div class="pt-2">
+            <div class="flex gap-1">
+              <div class="flex-col size-9/12">
+                <InputGroup>
+                  <InputGroupAddon>ws://</InputGroupAddon>
+                  <FloatLabel variant="on">
+                    <InputText id="ws_host" class="w-full text-xs" v-model="config.ws.host" autocomplete="off"
+                      :readonly="wsConnectionActive" />
+                    <label for="ws_host">Host</label>
+                  </FloatLabel>
+                </InputGroup>
               </div>
-              <div class="pt-2">
+              <div class="flex-col size-3/12">
                 <FloatLabel variant="on">
-                  <Password id="ws_password" fluid :toggleMask="true" :feedback="false" v-model="config.ws.password"
-                    :disabled="wsConnectionActive" autocomplete="off" />
-                  <label for="ws_password">WS password</label>
+                  <InputText id="ws_port" class="w-full text-xs" v-model="config.ws.port" autocomplete="off"
+                    :readonly="wsConnectionActive" />
+                  <label for="ws_port">Port</label>
                 </FloatLabel>
               </div>
-              <div class="">
-                <div class="flex-col">
+            </div>
 
-                  <div class="pt-2 float-right" v-if="wsConnectionActive">
-                    <Button icon="pi pi-times-circle" label="Disconnect" severity="danger" variant="text"
-                      @click="disconnect()" rounded aria-label="Filter" />
-                  </div>
-                </div>
-                <div>
-                  <div class="float-left pt-3">
-
-                  </div>
-                  <div class="pt-2 float-right" v-if="!wsConnectionActive">
-                    <Button size="small" label="Connect" severity="success" @click="establishWSConnection(true)" />
-                  </div>
-                </div>
+          </div>
+          <div class="pt-2">
+            <FloatLabel variant="on">
+              <Password id="ws_password" fluid :toggleMask="true" :feedback="false" v-model="config.ws.password"
+                :disabled="wsConnectionActive" autocomplete="off" />
+              <label for="ws_password">WS password</label>
+            </FloatLabel>
+          </div>
+          <div class="pb-4 pt-2 pl-4">
+            <div class="flex-col">
+              <div class="pt-2" v-if="wsConnectionActive">
+                <Button icon="pi pi-times-circle" label="Disconnect" severity="danger" variant="text"
+                  @click="disconnect()" rounded aria-label="Filter" />
               </div>
-            </AccordionContent>
-          </AccordionPanel>
-          <AccordionPanel :value="2" :disabled="!wsConnectionActive">
-            <AccordionHeader>
-              <div class="flex w-full">
-                <div class="flex-col size-4/12 pt-2">Automatic control</div>
-                <div class="flex-col size-2/12 pt-1">
-                  <ToggleSwitch size="small" v-model="empty" @click.stop @change="toggleSwitcher" />
-                </div>
-                <div class="flex-col size-6/12 pr-2">
-                  <FloatLabel class="w-full" variant="on">
-                    <Select v-model="forceScene" @click.stop inputId="forceScene" :disabled="config?.ws?.active"
-                      :options="obs.scenes" optionLabel="sceneName" optionValue="sceneName" class="w-full"
-                      @change="forceSceneChange()" />
-                    <label for="obs_source">Force scene</label>
-                  </FloatLabel>
-                </div>
+            </div>
+            <div>
+              <div class="pt-2" v-if="!wsConnectionActive">
+                <Button size="small" label="Connect" severity="success" @click="establishWSConnection(true)" />
               </div>
-            </AccordionHeader>
-            <AccordionContent>
-              <div class="flex gap-2">
-                <div class="w-full">
-                  <Fluid>
+            </div>
+          </div>
+        </div>
 
-                    <div style="clear: both;"></div>
-                    <div class="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-3 gap-0">
-                      <div class="justify-center flex-row text-center">
-                        <div>
-                          Current bitrate
-                        </div>
-                        <span v-if="Math.floor(bitrate) >= config.srt.bitrate" class="text-green-500">
-                          {{ Math.floor(bitrate) }}
-                        </span>
-                        <span v-else class="text-red-500">
-                          {{ Math.floor(bitrate) }}
-                        </span>
-                        kbps
-                      </div>
-
-                      <div class="justify-center text-center">
-                        <div>Current scene</div>
-                        <span>{{ scene }}</span>
-                      </div>
-
-                      <div class="justify-center text-center">
-                        <div>Bad frames</div>
-                        <span v-if="bFrameCounter == 0" class="text-green-500">
-                          {{ bFrameCounter }} / {{ config.srt.bframes }}
-                        </span>
-                        <span v-else class="text-red-500">
-                          {{ bFrameCounter }} / {{ config.srt.bframes }}
-                        </span>
-                      </div>
-                    </div>
-                  </Fluid>
-
-                </div>
-              </div>
-              <div class="pt-6">
-                <canvas ref="chartCanvas" width="600" height="300"></canvas>
-              </div>
-            </AccordionContent>
-          </AccordionPanel>
-        </Accordion>
-
-
-      </TabPanel>
-
-      <TabPanel value="1" as="p" class="m-0">
-        <Card>
-          <template #title>OBS</template>
-          <template #content>
-            <div class="flex gap-2">
-              <div class="size-9/12">
+      </StepPanel>
+      <StepPanel v-slot="{ activateCallback }" value="2">
+        <div class="flex flex-col">
+          <div
+            class="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded bg-surface-50 dark:bg-surface-950 text-xs p-2 items-start">
+            <div class="flex gap-2 pt-2">
+              <div class="w-full">
                 <FloatLabel class="w-full" variant="on">
                   <Select v-model="config.obs.source" inputId="obs_source" :options="obs.sources"
                     optionLabel="sourceName" optionValue="sourceName" class="w-full" />
@@ -504,12 +440,6 @@ const forceSceneChange = async () => {
                 </FloatLabel>
                 <div class="pl-1 pt-1 text-gray-500">Media source that displays SRT source</div>
               </div>
-              <div class="size-3/12">
-                <Button size="small"
-                  :disabled="(config.obs.source === undefined || config.obs.main_scene === undefined)" label="Reload"
-                  severity="warn" @click="forceSrtReload()" />
-              </div>
-
             </div>
 
             <div class="pt-2">
@@ -530,7 +460,7 @@ const forceSceneChange = async () => {
               <div class="pl-1 pt-1 text-gray-500">Scene to switch to when SRT signal is lost</div>
             </div>
 
-            <div class="pt-2">
+            <div class="pt-4">
               <FloatLabel class="w-full" variant="on">
                 <Select v-model="config.obs.low_scene" inputId="obs_low_scene" :options="obs.scenes"
                   optionLabel="sceneName" optionValue="sceneName" class="w-full" />
@@ -540,7 +470,7 @@ const forceSceneChange = async () => {
                 active</div>
             </div>
 
-            <div class="pt-2">
+            <div class="pt-4">
               <FloatLabel class="w-full" variant="on">
                 <InputNumber v-model="config.srt.ratio" inputId="obs_low_scene" mode="decimal" class="text-xs"
                   showButtons :min="1" :step="1" :max="60" fluid />
@@ -549,7 +479,7 @@ const forceSceneChange = async () => {
               <div class="pl-1 pt-1 text-gray-500">Source check interval in secconds</div>
             </div>
 
-            <div class="pt-2">
+            <div class="pt-4">
               <FloatLabel class="w-full" variant="on">
                 <InputNumber v-model="config.srt.bframes" inputId="obs_bframes" mode="decimal" class="text-xs"
                   showButtons :min="1" :step="1" :max="60" fluid />
@@ -558,7 +488,7 @@ const forceSceneChange = async () => {
               <div class="pl-1 pt-1 text-gray-500">How many bad frames trigger scene switch</div>
             </div>
 
-            <div class="pt-2">
+            <div class="pt-4">
               <FloatLabel class="w-full" variant="on">
                 <InputNumber v-model="config.srt.bitrate" inputId="obs_bitrate" :useGrouping="false" class="text-xs"
                   :step="1" fluid />
@@ -567,12 +497,121 @@ const forceSceneChange = async () => {
               <div class="pl-1 pt-1 text-gray-500">How many bad frames trigger scene switch</div>
             </div>
 
-            <div class="pt-2 float-right">
-              <Button size="small" label="Save" severity="success" @click="saveToConfig" />
+            <div class="pt-6 pb-4 float-right">
+              <Button size="small" label="Save configuration" severity="success" @click="saveToConfig" />
             </div>
-          </template>
-        </Card>
-      </TabPanel>
-    </TabPanels>
-  </Tabs>
+          </div>
+        </div>
+      </StepPanel>
+      <StepPanel v-slot="{ activateCallback }" value="3">
+        <div
+          class="border-2 border-dashed border-surface-200 dark:border-surface-700 rounded bg-surface-50 dark:bg-surface-950 text-xs p-2">
+          <div class="flex flex-col">
+            <div class="text-xs p-2">
+              <div class="flex flex-wrap gap-2">
+
+                <Card class="flex-1 border border-surface shadow-none">
+                  <template #content>
+                    <div class="flex justify-between gap-8">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-surface-500 dark:text-surface-400 text-xs">Bitrate</span>
+                        <span v-if="bitrate >= config.srt.bitrate" class="text-green-500">
+                          {{ bitrate }} kbps
+                        </span>
+                        <span v-else class="text-red-500">
+                          {{ bitrate }} kbps
+                        </span>
+                      </div>
+                      <span class="w-8 h-8 rounded-full inline-flex justify-center items-center text-center"
+                        :style="{ backgroundColor: `#51a2ff`, color: '#ffffff' }">
+                        <i class="pi pi-chart-bar" />
+                      </span>
+                    </div>
+                  </template>
+                </Card>
+                <Card class="flex-1 border border-surface shadow-none">
+                  <template #content>
+                    <div class="flex justify-between gap-8">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-surface-500 dark:text-surface-400 text-xs">B-frames</span>
+                        <span v-if="bFrameCounter == 0" class="font-bold text-green-500">
+                          {{ bFrameCounter }} / {{ config.srt.bframes }}
+                        </span>
+                        <span v-else class="font-bold text-red-500">
+                          {{ bFrameCounter }} / {{ config.srt.bframes }}
+                        </span>
+                      </div>
+                      <span class="w-8 h-8 rounded-full inline-flex justify-center items-center text-center"
+                        :style="{ backgroundColor: `#fb2c36`, color: '#ffffff' }">
+                        <i class="pi pi-thumbs-down-fill" />
+                      </span>
+                    </div>
+                  </template>
+                </Card>
+                <Card class="flex-1 border border-surface shadow-none">
+                  <template #content>
+                    <div class="flex justify-between gap-8">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-surface-500 dark:text-surface-400 text-xs">Current scene</span>
+                        <span class="font-bold text-xs">{{ scene || 'Not connected' }}</span>
+                      </div>
+                      <span class="w-8 h-8 rounded-full inline-flex justify-center items-center text-center"
+                        :style="{ backgroundColor: `#ff6900`, color: '#ffffff' }">
+                        <i class="pi pi-video" />
+                      </span>
+                    </div>
+                  </template>
+                </Card>
+              </div>
+              <div class="pt-2">
+                <Card class="flex-4 border border-surface shadow-none">
+                  <template #content>
+                    <div class="flex justify-between gap-8">
+                      <div class="flex flex-col gap-1">
+                        <span class="text-surface-500 dark:text-surface-400 text-xs">Auto scene switch</span>
+                        <div class="font-bold text-xs flex gap-2">
+                          <div class="pt-1">Disabled</div>
+                          <ToggleSwitch size="small" v-model="empty" @click.stop @change="toggleSwitcher" />
+                          <div class="pt-1">Enabled</div>
+                        </div>
+                      </div>
+                      <span class="w-8 h-8 rounded-full inline-flex justify-center items-center text-center"
+                        :style="{ backgroundColor: `#34d399`, color: '#ffffff' }">
+                        <i class="pi pi-power-off" />
+                      </span>
+                    </div>
+                  </template>
+                </Card>
+              </div>
+
+
+              <div class="pt-4">
+                <canvas ref="chartCanvas" width="600" height="300"></canvas>
+              </div>
+              <div class="flex justify-between pt-4">
+                <div class="pr-4 w-full">
+                  <FloatLabel variant="on">
+                    <Select v-model="forceScene" @click.stop inputId="forceScene" :disabled="config?.ws?.active"
+                      :options="obs.scenes" optionLabel="sceneName" optionValue="sceneName" class="w-full"
+                      @change="forceSceneChange()" />
+                    <label for="obs_source">Force scene</label>
+                  </FloatLabel>
+                </div>
+                <div class="">
+                  <Button size="small" class="w-30"
+                    :disabled="(config.obs.source === undefined || config.obs.main_scene === undefined)"
+                    label="Reload SRT" severity="warn" @click="forceSrtReload()" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </StepPanel>
+    </StepPanels>
+  </Stepper>
+
+
+
+
+
 </template>
